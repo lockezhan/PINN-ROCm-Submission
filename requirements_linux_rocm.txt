@@ -6,3 +6,4 @@ numpy
 matplotlib
 scipy
 amdsmi  # amd_smi python library (if not already in image)
+pandas
