@@ -1,0 +1,19 @@
+# 使用 AMD 官方 ROCm + PyTorch 镜像
+# 这已经包含了针对 RDNA3 (如 W7000) 和 CDNA 架构优化的 PyTorch，以及底层 ROCm 库
+FROM rocm/pytorch:rocm6.1_ubuntu22.04_py3.10_pytorch_2.1.2
+
+WORKDIR /workspace/PINN_Framework
+
+# 拷贝依赖配置并安装
+COPY requirements_linux_rocm.txt .
+RUN pip install --no-cache-dir -r requirements_linux_rocm.txt
+
+# 拷贝全部工程代码
+COPY . .
+
+# 设定 DeepXDE 的后端为 PyTorch
+ENV DDE_BACKEND="pytorch"
+# 备注：W7000 系受官方原生支持，不要在此添加 HSA_OVERRIDE_GFX_VERSION
+
+# 默认运行命令（可由 docker run 时覆盖）
+CMD ["python", "main.py", "--scale", "large", "--precision", "float16"]

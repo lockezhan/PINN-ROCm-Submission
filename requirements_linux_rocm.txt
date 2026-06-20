@@ -1,0 +1,7 @@
+deepxde>=1.11.0
+torch>=2.1.0 --index-url https://download.pytorch.org/whl/rocm6.1
+numpy
+matplotlib
+scipy
+amdsmi  # amd_smi python library (if not already in image)
+pandas

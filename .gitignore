@@ -1,0 +1,32 @@
+# Python environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env/
+.venv/
+env.bak/
+venv.bak/
+
+# DeepXDE and PyTorch checkpoints
+*.pt
+*.pth
+*.ckpt
+outputs/checkpoints/
+
+# Logs and Data
+outputs/profiling/
+*.log
+*.dat
+*.csv
+
+# IDEs
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Generated Figures (Optional: you might want to keep these, but usually ignored)
+# outputs/figures/
