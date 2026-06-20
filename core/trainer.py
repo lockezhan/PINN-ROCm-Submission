@@ -77,7 +77,7 @@ def train_model(geom, pde_fn, funcs, num_domain, num_boundary, net, epochs=15000
     if local_rank == 0:
         print("[Trainer] Note: torch.compile is disabled as it does not support double backward for PINNs.")
         
-    # 【优化项 3：开启 Fused Adam】
+    # 【优化项：开启 Fused Adam】
     # 将 Adam 内部的数十次分散的显存读写操作融合成单个 CUDA Kernel，显著降低 CPU 开销
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-3, fused=(torch.cuda.is_available()))
     
@@ -91,7 +91,6 @@ def train_model(geom, pde_fn, funcs, num_domain, num_boundary, net, epochs=15000
         optimizer, T_max=(start_epoch + epochs), eta_min=1e-5, last_epoch=start_epoch - 1
     )
     
-    # 【性能核弹级优化1：提前计算目标值，彻底剔除内部循环的 CPU 拷贝与 Numpy 转换】
     if local_rank == 0:
         print("[Trainer] Generating collocation points and moving to GPU...")
     X_domain = geom.random_points(num_domain)
@@ -103,7 +102,6 @@ def train_model(geom, pde_fn, funcs, num_domain, num_boundary, net, epochs=15000
     V_true_np = v_func(X_bc)
     P_true_np = p_func(X_bc)
     
-    # 【性能核弹级优化2：将所有数据提前常驻显存 (GPU)，利用 DataLoader 的 GPU 内部切片消除 PCIe 带宽瓶颈】
     tensor_domain = torch.tensor(X_domain, dtype=torch.float32, device=device)
     tensor_bc_x = torch.tensor(X_bc, dtype=torch.float32, device=device)
     tensor_bc_u = torch.tensor(U_true_np, dtype=torch.float32, device=device)
@@ -290,9 +288,27 @@ def train_model(geom, pde_fn, funcs, num_domain, num_boundary, net, epochs=15000
                         f.write("Epoch, PDE_Loss, BC_Loss\n")
                     f.write(f"{epoch} {epoch_loss_pde} {epoch_loss_bc}\n")
                 
-                if epoch % 1000 == 0:
-                    base_net = net.module if hasattr(net, 'module') else net
-                    torch.save(base_net.state_dict(), f"{out_dir}/checkpoints/model_ep{epoch}.pt")
+                base_net = net.module if hasattr(net, 'module') else net
+                torch.save(base_net.state_dict(), f"{out_dir}/checkpoints/model_ep{epoch}.pt")
+                
+                # Keep only the 2 most recent checkpoints to save disk space
+                ckpt_dir = f"{out_dir}/checkpoints"
+                try:
+                    import glob
+                    ckpt_files = glob.glob(os.path.join(ckpt_dir, "model_ep*.pt"))
+                    def get_epoch_num(path):
+                        base = os.path.basename(path)
+                        num_str = base.replace("model_ep", "").replace(".pt", "")
+                        try:
+                            return int(num_str)
+                        except ValueError:
+                            return 0
+                    ckpt_files.sort(key=get_epoch_num)
+                    if len(ckpt_files) > 2:
+                        for old_ckpt in ckpt_files[:-2]:
+                            os.remove(old_ckpt)
+                except Exception as e:
+                    print(f"[Trainer] Error cleaning up checkpoints: {e}")
 
     if local_rank == 0:
         monitor.stop()
