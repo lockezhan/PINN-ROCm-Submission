@@ -1,126 +1,156 @@
-# High-Performance DDP & CUDA-Graph PINN Solver for 2D Navier-Stokes
+# HPC-optimized PINN Solver on AMD ROCm for 2D Navier-Stokes
 
-This project is an industry-grade, highly optimized Physics-Informed Neural Network (PINN) solver designed to solve the steady-state 2D Navier-Stokes equations (Kovasznay Flow benchmark) with maximum hardware efficiency. 
+[简体中文说明入口](./README_CN.md)
 
-The framework is optimized for both **NVIDIA CUDA** (e.g., RTX 4090 D) and **AMD ROCm** (e.g., Radeon PRO W7900) architectures, featuring Distributed Data Parallel (DDP) scaling and CUDA Graphs static acceleration.
+This repository contains an industry-grade, highly optimized Physics-Informed Neural Network (PINN) solver designed to solve the steady-state 2D incompressible Navier-Stokes equations (Kovasznay Flow benchmark) with maximum hardware efficiency.
 
----
-
-## 📖 Mathematical Formulation
-
-The steady-state 2D incompressible Navier-Stokes equations are defined as:
-
-$$u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + \frac{\partial p}{\partial x} - \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) = 0$$
-
-$$u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + \frac{\partial p}{\partial y} - \nu \left( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right) = 0$$
-
-$$\frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0$$
-
-where $\nu = 0.05$ is the kinematic viscosity, and $u, v, p$ are the velocity components and pressure.
-
-### Kovasznay Flow Benchmark
-The analytical solution (Kovasznay Flow) on the domain $[-0.5, 1.0] \times [-0.5, 1.5]$ is used for boundary conditions and error validation:
-
-$$u_{true}(x,y) = 1 - e^{\lambda x} \cos(2\pi y)$$
-
-$$v_{true}(x,y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)$$
-
-$$p_{true}(x,y) = \frac{1}{2} (1 - e^{2\lambda x})$$
-
-where $\lambda = 10 - \sqrt{100 + 4\pi^2}$.
+The solver framework is specifically tailored for the **AMD ROCm** ecosystem (e.g., Radeon PRO W7900 or W7000 series GPUs), utilizing Distributed Data Parallel (DDP) scaling and HIP static graph execution (HIP Graph) acceleration.
 
 ---
 
-## ⚡ High-Performance HPC Engineering Highlights
+## 📂 Repository Structure
 
-Standard PINN implementations suffer from severe CPU-bound bottlenecks due to the complex computational graphs required for second-order derivatives. This framework implements five key optimizations to bypass these bottlenecks:
-
-### 1. CUDA Graphs Static Recording
-- **Problem**: In PyTorch eager mode, computing Hessians launches hundreds of tiny GPU kernels sequentially. The CPU-GPU kernel launch latency dominates, leaving the GPU underutilized (often <10% core load).
-- **Solution**: For single-GPU full-batch training, the entire forward, double-backward (Hessians), and backward pass are recorded as a static GPU execution sequence (**CUDA Graph**). During training, the CPU calls a single execution hook `g.replay()`, allowing the GPU to run back-to-back at hardware speed. This increases SM utilization from <20% to 90%+ and increases training speed by 3x–10x.
-
-### 2. GPUDataLoader (Zero-Copy Data Engine)
-- **Problem**: Re-creating PyTorch `DataLoader` iterators at every epoch introduces major CPU overhead.
-- **Solution**: We bypass PyTorch's native `DataLoader` with `GPUDataLoader`. All collocation points are stored in GPU memory. When the batch size covers the dataset (full-batch), it triggers a **zero-copy pointer bypass**, yielding the original tensor directly without indexing or memory copying. For mini-batching, index shuffling (`torch.randperm`) is performed entirely on the GPU.
-
-### 3. Native PyTorch Autograd Optimization
-- **Problem**: DeepXDE wrappers cache gradients in global python dictionaries, creating significant Python overhead.
-- **Solution**: We calculate all derivatives using pure PyTorch `torch.autograd.grad` directly. By using `grad_outputs=torch.ones_like(u)`, we obtain both $\frac{\partial u}{\partial x}$ and $\frac{\partial u}{\partial y}$ in a single backward pass, halving the autograd calls.
-
-### 4. Dynamic Precision Control (FP32 vs. BF16 AMP)
-- **BFloat16 AMP**: Speeds up matrix multiplications by utilizing Tensor Cores. It keeps the dynamic range of Float32 (exponent) to prevent the Hessian underflow common in standard FP16.
-- **Float32 Eager**: If high physical accuracy is required, passing `--precision float32` disables mixed precision. This prevents quantization noise from propagating through second-order derivatives, lowering the maximum velocity error (e.g. from 0.029 to under 0.005).
-
-### 5. Multi-GPU Distributed Data Parallel (DDP)
-- Supports distributed training over multiple GPUs (up to 8 cards) via PyTorch DDP.
-- Employs a custom seed-reproducible `DistributedSampler` directly in the GPU loader to partition collocation points across ranks, avoiding duplication.
+```text
+PINN-ROCm-Submission/
+├── core/                         # Core implementation of the algorithm
+│   ├── network.py                # FNN architecture and float configuration
+│   ├── pde_def.py                # Navier-Stokes residual formulation using native Autograd
+│   ├── trainer.py                # Main DDP training loops, GPUDataLoader, and HIP Graph execution
+│   ├── profiler.py               # Real-time hardware telemetry recorder (VRAM, Power, SM Util)
+│   └── visualizer.py             # Vis field and error distribution plotting script
+├── outputs_extreme_8_float32/    # Training results (extreme scale, 8 GPUs)
+├── outputs_large_4_float32/      # Training results (large scale, 4 GPUs)
+├── outputs_large_8_float32/      # Training results (large scale, 8 GPUs)
+├── outputs_large_single_float32/ # Training results (large scale, 1 GPU)
+├── outputs_small_float32/        # Training results (small scale, 1 GPU)
+├── Dockerfile_rocm               # Docker container specification for AMD ROCm env
+├── requirements_linux_rocm.txt   # Pip package requirements for AMD ROCm
+├── run_and_push.sh               # One-click benchmark and execution script
+├── main.py                       # Project CLI and distributed entrypoint
+├── analyze_hardware.py           # Evaluates telemetry log and plots academic figures
+├── plot_loss.py                  # Utility script to plot Loss history
+├── combined_ns_flow.png          # Visualized velocity and pressure field comparison
+└── combined_loss_curve.png        # Convergence loss curves comparison
+```
 
 ---
 
 ## 🛠️ Installation & Environment Setup
 
-Select the requirements file based on your OS and GPU backend:
+This solver supports both native installation on a host machine and containerized deployment using Docker.
 
-### Windows (NVIDIA CUDA)
-1. Install CUDA Toolkit 12.1+.
-2. Install Python 3.10+.
-3. Run:
-   ```bash
-   pip install -r requirements_win_cuda.txt
-   ```
-
-### Linux (AMD ROCm / ROCm 6.0+)
-1. Ensure the ROCm kernel module and driver are active.
-2. Install PyTorch with ROCm support.
-3. Run:
-   ```bash
-   pip install -r requirements_linux_rocm.txt
-   ```
-
----
-
-## 🏃‍♂️ Running Guide
-
-### 1. Single-GPU Local Run (e.g. RTX 4090 D)
-Run with different precision modes:
-- **High Accuracy Mode (Float32)**:
-  ```bash
-  python main.py --scale large --batch_size 200000 --precision float32
-  ```
-- **High Throughput Mode (BFloat16 - CUDA Graphs enabled)**:
-  ```bash
-  python main.py --scale large --batch_size 200000 --precision bfloat16
-  ```
-
-### 2. Multi-GPU DDP Run (e.g. 8x Radeon PRO W7900)
-Use `torchrun` to scale across all available GPUs:
+### 1. Local Pip Installation (Non-Containerized)
+Ensure your host machine has ROCm drivers and ROCm-compatible PyTorch installed, then run:
 ```bash
-torchrun --nproc_per_node=8 main.py --scale extreme --precision float32 --batch_size 16384
+pip install -r requirements_linux_rocm.txt
 ```
 
+### 2. Docker Container Setup (Recommended for Evaluation)
+To easily reproduce the results in an isolated container environment, we provide an AMD ROCm Dockerfile [Dockerfile_rocm](./Dockerfile_rocm).
+
+*   **Build the Docker Image**:
+    ```bash
+    docker build -f Dockerfile_rocm -t pinn-solver:rocm .
+    ```
+*   **Run the Container** (binds the AMD host graphics devices and maps the `/outputs` directory to extract logs):
+    ```bash
+    # 1. Create a local output directory on your host
+    mkdir -p outputs
+
+    # 2. Run the container with GPU devices and directory mapping
+    docker run -it --rm \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --ipc=host \
+      -v $(pwd)/outputs:/workspace/PINN_Framework/outputs \
+      pinn-solver:rocm
+    ```
+    Once the training completes, you can directly access the visualized figures and profiling metrics under the `./outputs/` directory on your host machine.
+
 ---
 
-## 📊 Academic Profiling & Analysis
+## 🏃‍♂️ Execution & Benchmark Guide
 
-The framework logs hardware performance metrics (VRAM, Power, SM Util) to `outputs/profiling/hardware_metrics.log`.
+### 1. One-Click Benchmark Script
+We provide a unified, automated benchmarking script [run_and_push.sh](./run_and_push.sh) to update dependencies, coordinate single/multi-card training, clean up redundant checkpoints, and generate profiling plots.
 
-To generate publication-ready academic plots, run:
+*   **Single-GPU Benchmark**:
+    ```bash
+    chmod +x run_and_push.sh
+    ./run_and_push.sh --scale small --precision float32 --gpus 0
+    ```
+*   **Multi-GPU Parallel Benchmark** (e.g., 8-GPU DDP training):
+    ```bash
+    chmod +x run_and_push.sh
+    ./run_and_push.sh --scale large --precision float32 --gpus 0,1,2,3,4,5,6,7
+    ```
+
+### 2. Fine-grained CLI Command Execution
+To run training directly using `main.py`, make sure to pass the GPU bindings via the environment variables `HIP_VISIBLE_DEVICES` (for AMD ROCm) or `CUDA_VISIBLE_DEVICES` (for NVIDIA CUDA):
+
+*   **High-Accuracy Single-GPU Mode (Float32)**:
+    ```bash
+    HIP_VISIBLE_DEVICES=0 python main.py --scale small --precision float32 --epochs 2000 --out_dir outputs/small
+    ```
+*   **High-Performance Single-GPU Mode (BFloat16 + HIP Graph Acceleration)**:
+    ```bash
+    HIP_VISIBLE_DEVICES=0 python main.py --scale large --precision bfloat16 --epochs 2000 --out_dir outputs/large_bf16
+    ```
+*   **Multi-GPU DDP Distributed Parallel Mode** (e.g., 4 GPUs):
+    ```bash
+    HIP_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 main.py --scale large --precision float32 --batch_size 200000 --epochs 2000 --out_dir outputs/large_4gpus
+    ```
+
+---
+
+## 📖 Mathematical Formulation
+
+Steady-state 2D incompressible Navier-Stokes equations:
+
+- x-direction momentum equation:
+$$
+u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + \frac{\partial p}{\partial x} - \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) = 0
+$$
+
+- y-direction momentum equation:
+$$
+u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + \frac{\partial p}{\partial y} - \nu \left( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right) = 0
+$$
+
+- Continuity equation:
+$$
+\frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0
+$$
+
+where kinematic viscosity $\nu = 0.05$, $u$ and $v$ represent the velocity fields, and $p$ represents the pressure field.
+
+### Kovasznay Flow Benchmark
+Analytical solutions for boundaries and error validation:
+
+$$
+u_{true}(x, y) = 1 - e^{\lambda x} \cos(2\pi y)
+$$
+
+$$
+v_{true}(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)
+$$
+
+$$
+p_{true}(x, y) = \frac{1}{2} (1 - e^{2\lambda x})
+$$
+
+where parameter $\lambda = 10 - \sqrt{100 + 4\pi^2}$.
+
+---
+
+## 📊 Telemetry Profiling & Visualizations
+
+The framework automatically saves VRAM occupancy, power consumption, and GPU utilization metrics inside `${OUT_DIR}/profiling/hardware_metrics.log`.
+
+To plot NeurIPS/IEEE paper-standard academic diagrams evaluating hardware footprints, run:
 ```bash
-python analyze_hardware.py
+python analyze_hardware.py --dir <OUTPUT_DIRECTORY>
 ```
-This generates:
-* **`outputs/figures/hardware_academic_profile.png`**: A consolidated 3x1 multi-panel plot showing VRAM limits (OOM boundary lines) and training stages (Warmup vs. Hessian computation) in line with NeurIPS/IEEE paper standards.
-* **Individual Metric Curves**: `vram_usage.png`, `power_usage.png`, and `gpu_utilization.png`.
-
----
-
-## 📂 Sub-Project Structure
-
-- `core/`
-  - `network.py`: Configures the FNN layers and floating-point parameters.
-  - `pde_def.py`: Contains the 2D Navier-Stokes equation using native Autograd.
-  - `trainer.py`: Holds the main DDP loop, GPUDataLoader, and CUDA Graphs logic.
-  - `profiler.py`: Records real-time system metrics (NVIDIA and AMD).
-  - `visualizer.py`: Visualizes prediction flow fields and error distributions.
-- `main.py`: Entry point handling parsing and DDP initialization.
-- `analyze_hardware.py`: Plots academic hardware logs.
+This produces the following figures under the `figures/` subfolder:
+- **`hardware_academic_profile.png`**: Consolidated 3x1 metrics plot illustrating hardware limits, Hessian computation bottlenecks, and warmup stages.
+- **`ns_flow_field.png`**: 2D visualized Kovasznay flow fields comparing PINN predictions with analytical truths.
