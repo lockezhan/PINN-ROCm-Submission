@@ -111,16 +111,19 @@ pip install -r requirements_linux_rocm.txt
 稳态二维不可压缩 Navier-Stokes 方程定义如下：
 
 **x 方向动量方程：**
+
 $$
 u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + \frac{\partial p}{\partial x} - \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) = 0
 $$
 
 **y 方向动量方程：**
+
 $$
 u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + \frac{\partial p}{\partial y} - \nu \left( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right) = 0
 $$
 
 **连续性方程（质量守恒）：**
+
 $$
 \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0
 $$
