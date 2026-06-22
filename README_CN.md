@@ -30,7 +30,9 @@ PINN-ROCm-Submission/
 ├── analyze_hardware.py           # 提取性能指标日志并一键绘制学术负载图表
 ├── plot_loss.py                  # 绘制 Loss 收敛历史曲线的辅助脚本
 ├── combined_ns_flow.png          # 各分支预测速度场与压力场的对比图
-└── combined_loss_curve.png        # 各分支 Loss 收敛曲线对比图
+├── combined_loss_curve.png       # 各分支 Loss 收敛曲线对比图
+├── README.md                     # 主文档（英文版）
+└── README_CN.md                  # 中文版说明文档
 ```
 
 ---
@@ -108,39 +110,39 @@ pip install -r requirements_linux_rocm.txt
 
 稳态二维不可压缩 Navier-Stokes 方程定义如下：
 
-- x 方向动量方程：
+**x 方向动量方程：**
 $$
 u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + \frac{\partial p}{\partial x} - \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) = 0
 $$
 
-- y 方向动量方程：
+**y 方向动量方程：**
 $$
 u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + \frac{\partial p}{\partial y} - \nu \left( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right) = 0
 $$
 
-- 连续性方程（质量守恒）：
+**连续性方程（质量守恒）：**
 $$
 \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0
 $$
 
-其中 运动粘度系数 $\nu = 0.05$，$u$ 和 $v$ 分别为速度分量，$p$ 为压力。
+其中运动粘度系数 $\nu = 0.05$ ， $u$ 和 $v$ 分别为速度分量， $p$ 为压力。
 
 ### Kovasznay Flow 基准测试
 求解域为 $[-0.5, 1.0] \times [-0.5, 1.5]$。其解析解用于边界条件定义和误差精度验证：
 
 $$
-u_{true}(x, y) = 1 - e^{\lambda x} \cos(2\pi y)
+u_{\text{true}}(x, y) = 1 - e^{\lambda x} \cos(2\pi y)
 $$
 
 $$
-v_{true}(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)
+v_{\text{true}}(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)
 $$
 
 $$
-p_{true}(x, y) = \frac{1}{2} (1 - e^{2\lambda x})
+p_{\text{true}}(x, y) = \frac{1}{2} (1 - e^{2\lambda x})
 $$
 
-其中参数 $\lambda = 10 - \sqrt{100 + 4\pi^2}$。
+其中参数 $\lambda = 10 - \sqrt{100 + 4\pi^2}$ 。
 
 ---
 
@@ -153,5 +155,5 @@ $$
 python analyze_hardware.py --dir <输出目录路径>
 ```
 这将在对应的 `figures/` 目录下生成：
-*   **`hardware_academic_profile.png`**：包含显存 OOM 边界线及 Hessian 阶段的 3x1 学术监控大图。
+*   **`hardware_academic_profile.png`**：包含显存 OOM 边界线及 Hessian 阶段 of 3x1 学术监控大图。
 *   **`ns_flow_field.png`**：二维 Kovasznay 流场预测对比图（PINN 预测值 vs 真实解析解）。

@@ -30,7 +30,9 @@ PINN-ROCm-Submission/
 ├── analyze_hardware.py           # Evaluates telemetry log and plots academic figures
 ├── plot_loss.py                  # Utility script to plot Loss history
 ├── combined_ns_flow.png          # Visualized velocity and pressure field comparison
-└── combined_loss_curve.png        # Convergence loss curves comparison
+├── combined_loss_curve.png       # Convergence loss curves comparison
+├── README.md                     # Main documentation (English)
+└── README_CN.md                  # Chinese documentation
 ```
 
 ---
@@ -105,19 +107,19 @@ To run training directly using `main.py`, make sure to pass the GPU bindings via
 
 ## 📖 Mathematical Formulation
 
-Steady-state 2D incompressible Navier-Stokes equations:
+Steady-state 2D incompressible Navier-Stokes equations are defined as:
 
-- x-direction momentum equation:
+**x-direction momentum equation:**
 $$
 u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + \frac{\partial p}{\partial x} - \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) = 0
 $$
 
-- y-direction momentum equation:
+**y-direction momentum equation:**
 $$
 u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + \frac{\partial p}{\partial y} - \nu \left( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right) = 0
 $$
 
-- Continuity equation:
+**Continuity equation:**
 $$
 \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0
 $$
@@ -128,15 +130,15 @@ where kinematic viscosity $\nu = 0.05$, $u$ and $v$ represent the velocity field
 Analytical solutions for boundaries and error validation:
 
 $$
-u_{true}(x, y) = 1 - e^{\lambda x} \cos(2\pi y)
+u_{\text{true}}(x, y) = 1 - e^{\lambda x} \cos(2\pi y)
 $$
 
 $$
-v_{true}(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)
+v_{\text{true}}(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)
 $$
 
 $$
-p_{true}(x, y) = \frac{1}{2} (1 - e^{2\lambda x})
+p_{\text{true}}(x, y) = \frac{1}{2} (1 - e^{2\lambda x})
 $$
 
 where parameter $\lambda = 10 - \sqrt{100 + 4\pi^2}$.
